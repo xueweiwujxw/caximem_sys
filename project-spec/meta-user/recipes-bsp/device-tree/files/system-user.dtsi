@@ -5,7 +5,7 @@
         id = <0>;
         interrupt-parent = <&intc>;
         interrupt-names = "send_signal", "recv_signal";
-        interrupts = <0 30 0>, <0 31 0>;
+        interrupts = <0 30 1>, <0 31 1>;
     };
 };
 

@@ -23,6 +23,22 @@
 
 static const char *dev_fmt = "%s_%d";
 
+static irqreturn_t send_irq(int irq, void *dev) {
+    struct caximem_device *cdev;
+
+    cdev = (struct caximem_device *)dev;
+    caximem_info("caximem send irq triggered. %d, %d\n", irq, cdev->send_signal);
+    return IRQ_HANDLED;
+}
+
+static irqreturn_t recv_irq(int irq, void *dev) {
+    struct caximem_device *cdev;
+
+    cdev = (struct caximem_device *)dev;
+    caximem_info("caximem send irq triggered. %d, %d\n", irq, cdev->recv_signal);
+    return IRQ_HANDLED;
+}
+
 static ssize_t caximem_read(struct file *file, char __user *buffer, size_t length, loff_t *offset) {
     caximem_info("read divice\n");
     return 0;
@@ -88,10 +104,26 @@ int caximem_chrdev_init(struct caximem_device *dev) {
     }
     caximem_debug("major: %d, minor: %d", MAJOR(dev->cdevno), MINOR(dev->cdevno));
 
+    // Register interrupt
+    rc = request_irq(dev->send_signal, send_irq, IRQF_TRIGGER_RISING, MODULE_NAME, dev);
+    if (rc < 0) {
+        caximem_err("failed to request send interrupt.\n");
+        goto chrdev_cleanup;
+    }
+    rc = request_irq(dev->recv_signal, recv_irq, IRQF_TRIGGER_RISING, MODULE_NAME, dev);
+    if (rc < 0) {
+        caximem_err("failed to request send interrupt.\n");
+        goto send_irq_cleanup;
+    }
+
     // Success
     caximem_info("Success initialize chardev %s_%d.\n", dev->dev_name, dev->dev_id);
     return 0;
 
+send_irq_cleanup:
+    free_irq(dev->send_signal, dev);
+chrdev_cleanup:
+    cdev_del(&dev->chrdev);
 device_cleanup:
     device_destroy(dev->dev_class, dev->cdevno);
 class_cleanup:
@@ -104,6 +136,8 @@ ret:
 
 // Clean up caximem character device struct
 void caximem_chrdev_exit(struct caximem_device *dev) {
+    free_irq(dev->recv_signal, dev);
+    free_irq(dev->send_signal, dev);
     cdev_del(&dev->chrdev);
     device_destroy(dev->dev_class, dev->cdevno);
     class_destroy(dev->dev_class);

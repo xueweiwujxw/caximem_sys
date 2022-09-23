@@ -26,21 +26,27 @@
 
 struct caximem_device
 {
-    unsigned int magic;           // Magic number
-    int send_signal;              // Signal used to notify send finish
-    int recv_signal;              // Signal used to notify recive finish
-    int minor;                    // The major number of the device
-    dev_t cdevno;                 // The device number of the device
-    struct device *sys_device;    // Device structure for the device
-    struct class *dev_class;      // Device class for the device
-    struct cdev chrdev;           // Character device structure for the device
-    struct platform_device *pdev; // Platform device structure for the device
-    const char *dev_name;         // The name of the device
-    int dev_id;                   // The id of the device
+    unsigned int magic;               // Magic number
+    int send_signal;                  // Signal used to notify send finish
+    spinlock_t events_lock_send;      // Send signal spinlock
+    wait_queue_head_t events_wq_send; // Send signal wait queue
+    int recv_signal;                  // Signal used to notify recive finish
+    spinlock_t events_lock_recv;      // Send signal spinlock
+    wait_queue_head_t events_wq_recv; // Send signal wait queue
+    int minor;                        // The major number of the device
+    dev_t cdevno;                     // The device number of the device
+    struct device *sys_device;        // Device structure for the device
+    struct class *dev_class;          // Device class for the device
+    struct cdev chrdev;               // Character device structure for the device
+    struct platform_device *pdev;     // Platform device structure for the device
+    const char *dev_name;             // The name of the device
+    int dev_id;                       // The id of the device
 };
 
 int caximem_chrdev_init(struct caximem_device *dev);
 void caximem_chrdev_exit(struct caximem_device *dev);
+
+
 
 #define __FILENAME__ \
     (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)

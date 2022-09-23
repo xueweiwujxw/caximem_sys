@@ -27,8 +27,6 @@
 #include <linux/of_device.h>
 #include <linux/of_platform.h>
 
-#define DEBUG
-
 MODULE_AUTHOR("wlanxww");
 MODULE_LICENSE("GPL");
 MODULE_VERSION("0.1.0");
@@ -73,7 +71,8 @@ static int caximem_probe(struct platform_device *pdev) {
     }
     if (strcmp(send_irq->name, send_signal_name)) {
         caximem_err("Error send irq name.\n");
-        return -EINVAL;
+        rc = -EINVAL;
+        goto destroy_mem_dev;
     }
     caximem_dev->send_signal = send_irq->start;
 
@@ -85,9 +84,10 @@ static int caximem_probe(struct platform_device *pdev) {
     }
     if (strcmp(recv_irq->name, recv_signal_name)) {
         caximem_err("Error recv irq name.\n");
-        return -EINVAL;
+        rc = -EINVAL;
+        goto destroy_mem_dev;
     }
-    caximem_dev->recv_signal = send_irq->start;
+    caximem_dev->recv_signal = recv_irq->start;
 
     // Assign deivece name
     of_name = np->name;
@@ -109,8 +109,6 @@ static int caximem_probe(struct platform_device *pdev) {
     // Success
     caximem_info("driver probed.\n");
     return 0;
-
-destroy_send_resource:
 
 destroy_mem_dev:
     caximem_chrdev_exit(caximem_dev);
