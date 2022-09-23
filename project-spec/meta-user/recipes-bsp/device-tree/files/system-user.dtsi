@@ -1,0 +1,40 @@
+/include/ "system-conf.dtsi"
+/ {
+    caximem_instance: caximem@0 {
+        compatible = "vendor,caximem";
+        id = <0>;
+        interrupt-parent = <&intc>;
+        interrupt-names = "send_signal", "recv_signal";
+        interrupts = <0 30 0>, <0 31 0>;
+    };
+};
+
+&gem0 {
+    phy-handle = <&phy1>;
+    phy-mode = "rgmii-id";
+    gmii2rgmii-phy-handle = <&gmii_to_rgmii_0>;
+    ps7_ethernet_0_mdio: mdio {
+        #address-cells = <1>;
+        #size-cells = <0>;
+        gmii_to_rgmii_0: gmii_to_rgmii_0@8 {
+            compatible = "xlnx,gmii-to-rgmii-1.0";
+            phy-handle = <&phy1>;
+            reg = <8>;
+        };
+        phy1: ethernet-phy@0 {
+            device_type = "ethernet-phy";
+            interrupt-parent = <&intc>;
+            interrupts = <0 29 0>;
+            reset-gpios = <&gpio0 1 0>;
+            // 地址不指定会去扫描0-31，可能有特殊情况扫描不到，目前不指定的原因是硬件读取的地址不一致
+            // reg = <3>;
+        };
+    };
+};
+
+&slcr {
+    clkc: clkc@100 {
+        clocks = <&clkc 16>;
+        clock-names = "gem0_emio_clk";
+    };
+};
