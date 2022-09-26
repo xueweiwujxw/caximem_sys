@@ -56,8 +56,7 @@ static int caximem_release(struct inode *inode, struct file *file) {
     return 0;
 }
 static int caximem_mmap(struct file *file, struct vm_area_struct *vma) {
-    caximem_info("mmap divice\n");
-    return 0;
+    return -EPERM;
 }
 
 static const struct file_operations caximem_fops = {

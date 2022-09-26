@@ -41,11 +41,6 @@ const char *recv_signal_name = RECV_IRQ_STR;
 module_param(minor_number, int, S_IRUGO);
 module_param(driver_name, charp, S_IRUGO);
 
-static irqreturn_t caximem_irq(int irq, void *lp) {
-    printk("caximem interrupt\n");
-    return IRQ_HANDLED;
-}
-
 static int caximem_probe(struct platform_device *pdev) {
     int rc = 0;
     struct caximem_device *caximem_dev;
@@ -99,6 +94,7 @@ static int caximem_probe(struct platform_device *pdev) {
     caximem_dev->dev_name = of_name;
     caximem_dev->dev_id = id;
 
+    // Init character device
     rc = caximem_chrdev_init(caximem_dev);
     if (rc < 0) {
         goto destroy_mem_dev;
