@@ -29,6 +29,8 @@
 #define RECV_REG_NO RECV_IRQ_NO
 #define RECV_REG_STR "recv_buffer"
 
+#define CAXIMEM_MAGIC 0x1acffc1dul
+
 struct caximem_device
 {
     unsigned int magic; // Magic number

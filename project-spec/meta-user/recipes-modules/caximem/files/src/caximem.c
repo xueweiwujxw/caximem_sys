@@ -62,9 +62,9 @@ static int caximem_probe(struct platform_device *pdev) {
 
     // Get interrupt
     send_irq = platform_get_resource(pdev, IORESOURCE_IRQ, SEND_IRQ_NO);
-    if (IS_ERR(send_irq)) {
+    if (send_irq == NULL) {
         caximem_err("Failed to attach irq resource.\n");
-        rc = PTR_ERR(send_irq);
+        rc = -EINVAL;
         goto destroy_mem_dev;
     }
     if (strcmp(send_irq->name, send_signal_name)) {
@@ -75,9 +75,9 @@ static int caximem_probe(struct platform_device *pdev) {
     caximem_dev->send_signal = send_irq->start;
 
     recv_irq = platform_get_resource(pdev, IORESOURCE_IRQ, RECV_IRQ_NO);
-    if (IS_ERR(recv_irq)) {
+    if (recv_irq == NULL) {
         caximem_err("Failed to attach irq resource.\n");
-        rc = PTR_ERR(recv_irq);
+        rc = -EINVAL;
         goto destroy_mem_dev;
     }
     if (strcmp(recv_irq->name, recv_signal_name)) {
@@ -89,9 +89,9 @@ static int caximem_probe(struct platform_device *pdev) {
 
     // Get io memory info
     send_reg = platform_get_resource(pdev, IORESOURCE_MEM, SEND_REG_NO);
-    if (IS_ERR(send_reg)) {
+    if (send_reg == NULL) {
         caximem_err("Failed to attach reg resource.\n");
-        rc = PTR_ERR(send_reg);
+        rc = -EINVAL;
         goto destroy_mem_dev;
     }
     if (strcmp(send_reg->name, send_buffer_name)) {
@@ -105,9 +105,9 @@ static int caximem_probe(struct platform_device *pdev) {
 
 
     recv_reg = platform_get_resource(pdev, IORESOURCE_MEM, RECV_REG_NO);
-    if (IS_ERR(recv_reg)) {
+    if (recv_reg == NULL) {
         caximem_err("Failed to attach reg resource.\n");
-        rc = PTR_ERR(recv_reg);
+        rc = -EINVAL;
         goto destroy_mem_dev;
     }
     if (strcmp(recv_reg->name, recv_buffer_name)) {
