@@ -23,7 +23,7 @@
 
 static const char *dev_fmt = "%s_%d";
 
-static irqreturn_t send_irq(int irq, void *dev) {
+static irqreturn_t send_irq_handler(int irq, void *dev) {
     struct caximem_device *cdev;
 
     cdev = (struct caximem_device *)dev;
@@ -31,7 +31,7 @@ static irqreturn_t send_irq(int irq, void *dev) {
     return IRQ_HANDLED;
 }
 
-static irqreturn_t recv_irq(int irq, void *dev) {
+static irqreturn_t recv_irq_handler(int irq, void *dev) {
     struct caximem_device *cdev;
 
     cdev = (struct caximem_device *)dev;
@@ -39,22 +39,68 @@ static irqreturn_t recv_irq(int irq, void *dev) {
     return IRQ_HANDLED;
 }
 
+/**
+ * File Operations
+ */
+
+/**
+ * @brief read data from character device
+ *
+ * @param file The file structure pointer
+ * @param buffer The memory address of user space
+ * @param length The number of bytes to read
+ * @param offset The offset of the read position relative to the beginning of the file
+ * @return ssize_t Returns the number of bytes read, or error code less than 0 for errors
+ */
 static ssize_t caximem_read(struct file *file, char __user *buffer, size_t length, loff_t *offset) {
     caximem_info("read divice\n");
+    unsigned long p = *offset;
     return 0;
 }
+
+/**
+ * @brief read data to character device
+ * 
+ * @param file  The file structure pointer
+ * @param buffer  The memory address of user space
+ * @param length  The number of bytes to write
+ * @param offset  The offset of the write position relative to the beginning of the file
+ * @return ssize_t  Returns the number of bytes written, or error code less than 0 for errors
+ */
 static ssize_t caximem_write(struct file *file, const char __user *buffer, size_t length, loff_t *offset) {
     caximem_info("write divice\n");
     return 0;
 }
+
+/**
+ * @brief open the character device
+ * 
+ * @param inode The inode structure pointer
+ * @param file The file structure pointer
+ * @return int Returns 0, or error code less than 0 for errors
+ */
 static int caximem_open(struct inode *inode, struct file *file) {
     caximem_info("open divice\n");
     return 0;
 }
+
+/**
+ * @brief release the character device
+ * 
+ * @param inode The inode structure pointer
+ * @param file The file structure pointer
+ * @return int Returns 0, or error code less than 0 for errors
+ */
 static int caximem_release(struct inode *inode, struct file *file) {
     caximem_info("release divice\n");
     return 0;
 }
+
+/**
+ * @brief mmap (not supported)
+ * 
+ * @return int Return -EPREM directly.
+ */
 static int caximem_mmap(struct file *file, struct vm_area_struct *vma) {
     return -EPERM;
 }
@@ -104,12 +150,12 @@ int caximem_chrdev_init(struct caximem_device *dev) {
     caximem_debug("major: %d, minor: %d", MAJOR(dev->cdevno), MINOR(dev->cdevno));
 
     // Register interrupt
-    rc = request_irq(dev->send_signal, send_irq, IRQF_TRIGGER_RISING, MODULE_NAME, dev);
+    rc = request_irq(dev->send_signal, send_irq_handler, IRQF_TRIGGER_RISING, MODULE_NAME, dev);
     if (rc < 0) {
         caximem_err("failed to request send interrupt.\n");
         goto chrdev_cleanup;
     }
-    rc = request_irq(dev->recv_signal, recv_irq, IRQF_TRIGGER_RISING, MODULE_NAME, dev);
+    rc = request_irq(dev->recv_signal, recv_irq_handler, IRQF_TRIGGER_RISING, MODULE_NAME, dev);
     if (rc < 0) {
         caximem_err("failed to request send interrupt.\n");
         goto send_irq_cleanup;

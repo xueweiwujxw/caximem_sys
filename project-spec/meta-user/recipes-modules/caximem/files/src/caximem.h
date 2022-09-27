@@ -24,38 +24,54 @@
 #define RECV_IRQ_NO 1
 #define RECV_IRQ_STR "recv_signal"
 
+#define SEND_REG_NO SEND_IRQ_NO
+#define SEND_REG_STR "send_buffer"
+#define RECV_REG_NO RECV_IRQ_NO
+#define RECV_REG_STR "recv_buffer"
+
 struct caximem_device
 {
-    unsigned int magic;               // Magic number
-    int send_signal;                  // Signal used to notify send finish
-    spinlock_t events_lock_send;      // Send signal spinlock
-    wait_queue_head_t events_wq_send; // Send signal wait queue
-    int recv_signal;                  // Signal used to notify recive finish
-    spinlock_t events_lock_recv;      // Send signal spinlock
-    wait_queue_head_t events_wq_recv; // Send signal wait queue
-    int minor;                        // The major number of the device
-    dev_t cdevno;                     // The device number of the device
-    struct device *sys_device;        // Device structure for the device
-    struct class *dev_class;          // Device class for the device
-    struct cdev chrdev;               // Character device structure for the device
-    struct platform_device *pdev;     // Platform device structure for the device
-    const char *dev_name;             // The name of the device
-    int dev_id;                       // The id of the device
+    unsigned int magic; // Magic number
+    /**
+     * send process
+     */
+    int send_signal;             // Signal used to notify send finish
+    struct semaphore send_sem;   // Semaphore for sending datq
+    unsigned long send_offset;   // Then beginning offset of dev memory for sending data
+    unsigned long send_max_size; // The maximum dev memory size for sending data
+    void *send_buffer;           // The buffer for sending data
+    /**
+     * recv process
+     */
+    int recv_signal;             // Signal used to notify recive finish
+    struct semaphore recv_sem;   // Semaphore for writing data
+    unsigned long recv_offset;   // The beginning offset of dev memory for recving data
+    unsigned long recv_max_size; // The maximum dev memory size for recving data
+    void *recv_buffer;           // The buffer for recving data
+    /**
+     * character device
+     */
+    int minor;                    // The major number of the device
+    dev_t cdevno;                 // The device number of the device
+    struct device *sys_device;    // Device structure for the device
+    struct class *dev_class;      // Device class for the device
+    struct cdev chrdev;           // Character device structure for the device
+    struct platform_device *pdev; // Platform device structure for the device
+    const char *dev_name;         // The name of the device
+    int dev_id;                   // The id of the device
 };
 
 int caximem_chrdev_init(struct caximem_device *dev);
 void caximem_chrdev_exit(struct caximem_device *dev);
 
-
-
 #define __FILENAME__ \
     (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 
+#define caximem_info(fmt, ...) \
+    printk(KERN_INFO MODULE_NAME ": %s: %s: " fmt, __FILENAME__, __func__, ##__VA_ARGS__)
+
 #define caximem_err(fmt, ...) \
     printk(KERN_ERR MODULE_NAME ": %s: %s: %d: " fmt, __FILENAME__, __func__, __LINE__, ##__VA_ARGS__)
-
-#define caximem_info(fmt, ...) \
-    printk(KERN_INFO MODULE_NAME ": %s: %s: %d: " fmt, __FILENAME__, __func__, __LINE__, ##__VA_ARGS__)
 
 #define caximem_warn(fmt, ...) \
     printk(KERN_WARNING MODULE_NAME ": %s: %s: %d: " fmt, __FILENAME__, __func__, __LINE__, ##__VA_ARGS__)

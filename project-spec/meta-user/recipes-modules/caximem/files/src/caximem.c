@@ -38,16 +38,19 @@ unsigned int minor_number = MINOR_NUMBER;
 char *driver_name = MODULE_NAME;
 const char *send_signal_name = SEND_IRQ_STR;
 const char *recv_signal_name = RECV_IRQ_STR;
+const char *send_buffer_name = SEND_REG_STR;
+const char *recv_buffer_name = RECV_REG_STR;
 module_param(minor_number, int, S_IRUGO);
 module_param(driver_name, charp, S_IRUGO);
 
 static int caximem_probe(struct platform_device *pdev) {
     int rc = 0;
-    struct caximem_device *caximem_dev;
-    struct device_node *np = pdev->dev.of_node;
-    struct resource *send_irq, *recv_irq;
-    const char *of_name;
-    int id;
+    struct caximem_device *caximem_dev;         // caximem_device pointer
+    struct device_node *np = pdev->dev.of_node; // The device tree node structure
+    struct resource *send_irq, *recv_irq;       // send and recv irq resource
+    struct resource *send_reg, *recv_reg;       // send and recv register resource
+    const char *of_name;                        // The name in device tree node
+    int id;                                     // The number of deive in device tree node
 
     // Allocate device structure
     caximem_dev = kmalloc(sizeof(*caximem_dev), GFP_KERNEL);
@@ -83,6 +86,38 @@ static int caximem_probe(struct platform_device *pdev) {
         goto destroy_mem_dev;
     }
     caximem_dev->recv_signal = recv_irq->start;
+
+    // Get io memory info
+    send_reg = platform_get_resource(pdev, IORESOURCE_MEM, SEND_REG_NO);
+    if (IS_ERR(send_reg)) {
+        caximem_err("Failed to attach reg resource.\n");
+        rc = PTR_ERR(send_reg);
+        goto destroy_mem_dev;
+    }
+    if (strcmp(send_reg->name, send_buffer_name)) {
+        caximem_err("Error send buffer name.\n");
+        rc = -EINVAL;
+        goto destroy_mem_dev;
+    }
+    caximem_dev->send_offset = send_reg->start;
+    caximem_dev->send_max_size = send_reg->end - send_reg->start + 1;
+    caximem_info("%s %08x %08x\n", send_reg->name, caximem_dev->send_offset, caximem_dev->send_max_size);
+
+
+    recv_reg = platform_get_resource(pdev, IORESOURCE_MEM, RECV_REG_NO);
+    if (IS_ERR(recv_reg)) {
+        caximem_err("Failed to attach reg resource.\n");
+        rc = PTR_ERR(recv_reg);
+        goto destroy_mem_dev;
+    }
+    if (strcmp(recv_reg->name, recv_buffer_name)) {
+        caximem_err("Error recv buffer name.\n");
+        rc = -EINVAL;
+        goto destroy_mem_dev;
+    }
+    caximem_dev->recv_offset = recv_reg->start;
+    caximem_dev->recv_max_size = recv_reg->end - recv_reg->start + 1;
+    caximem_info("%s %08x %08x\n", recv_reg->name, caximem_dev->recv_offset, caximem_dev->recv_max_size);
 
     // Assign deivece name
     of_name = np->name;
