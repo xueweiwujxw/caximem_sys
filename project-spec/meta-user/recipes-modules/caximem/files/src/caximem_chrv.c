@@ -94,13 +94,16 @@ static ssize_t caximem_write(struct file *file, const char __user *buffer, size_
         caximem_err("Invalid offset.\n");
         return length == 0 ? 0 : -ENXIO;
     }
-    if (length > caximem_dev->send_max_size - p) {
-        length = caximem_dev->send_max_size - p;
+    if (length > caximem_dev->send_max_size - p - sizeof(struct caximem_info)) {
+        length = caximem_dev->send_max_size - p - sizeof(struct caximem_info);
     }
-    if (copy_from_user((char *)caximem_dev->send_buffer + p, buffer, length)) {
+    caximem_info("%d\n", p + sizeof(struct caximem_info));
+    if (copy_from_user((char *)caximem_dev->send_buffer + p + sizeof(struct caximem_info), buffer, length)) {
         caximem_err("Write buffer failed.\n");
         return -EFAULT;
     } else {
+        caximem_dev->send_info->size = length;
+        caximem_dev->send_info->enable = true;
         offset += length;
         caximem_debug("write %d bytes from %ld.\n", length, p);
         return length;
@@ -136,12 +139,18 @@ static int caximem_open(struct inode *inode, struct file *file) {
         rc = -ENOMEM;
         goto release_private_data;
     }
+    caximem_dev->send_info = (struct caximem_info *)caximem_dev->send_buffer;
     caximem_dev->recv_buffer = ioremap(caximem_dev->recv_offset, caximem_dev->recv_max_size);
     if (caximem_dev->recv_buffer == NULL) {
         caximem_err("recv buffer ioremap error");
         rc = -ENOMEM;
         goto unmap_send_buffer;
     }
+    caximem_dev->recv_info = (struct caximem_info *)caximem_dev->recv_buffer;
+    caximem_dev->send_info->size = 0;
+    caximem_dev->send_info->enable = false;
+    caximem_dev->recv_info->size = 0;
+    caximem_dev->recv_info->enable = true;
     caximem_debug("open device\n");
     return 0;
 unmap_send_buffer:
