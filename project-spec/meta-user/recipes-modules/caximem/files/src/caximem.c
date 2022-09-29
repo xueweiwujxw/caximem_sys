@@ -101,7 +101,7 @@ static int caximem_probe(struct platform_device *pdev) {
     }
     caximem_dev->send_offset = send_reg->start;
     caximem_dev->send_max_size = send_reg->end - send_reg->start + 1;
-    caximem_info("%s %08x %08x\n", send_reg->name, caximem_dev->send_offset, caximem_dev->send_max_size);
+    caximem_info("%s %08lx %08lx\n", send_reg->name, caximem_dev->send_offset, caximem_dev->send_max_size);
 
 
     recv_reg = platform_get_resource(pdev, IORESOURCE_MEM, RECV_REG_NO);
@@ -117,7 +117,7 @@ static int caximem_probe(struct platform_device *pdev) {
     }
     caximem_dev->recv_offset = recv_reg->start;
     caximem_dev->recv_max_size = recv_reg->end - recv_reg->start + 1;
-    caximem_info("%s %08x %08x\n", recv_reg->name, caximem_dev->recv_offset, caximem_dev->recv_max_size);
+    caximem_info("%s %08lx %08lx\n", recv_reg->name, caximem_dev->recv_offset, caximem_dev->recv_max_size);
 
     // Assign deivece name
     of_name = np->name;

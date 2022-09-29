@@ -15,6 +15,9 @@
 #include <linux/kernel.h>
 #include <linux/device.h>
 #include <linux/cdev.h>
+#include <linux/semaphore.h>
+#include <linux/wait.h>
+#include <linux/atomic.h>
 
 #define MODULE_NAME "caximem"
 #define MINOR_NUMBER 0
@@ -31,25 +34,41 @@
 
 #define CAXIMEM_MAGIC 0x1acffc1dul
 
+struct caximem_ctrl
+{
+    bool enable;            // process enable
+    unsigned int size : 24; // data size in ram
+};
+
 struct caximem_device
 {
     unsigned int magic; // Magic number
+
+    struct semaphore file_sem; // Semaphore that guarantees that the file is only opened by one process
     /**
      * send process
      */
-    int send_signal;             // Signal used to notify send finish
-    struct semaphore send_sem;   // Semaphore for sending datq
-    unsigned long send_offset;   // Then beginning offset of dev memory for sending data
-    unsigned long send_max_size; // The maximum dev memory size for sending data
-    void *send_buffer;           // The buffer for sending data
+    int send_signal;                // Signal used to notify send finish
+    struct semaphore send_sem;      // Semaphore for sending datq
+    unsigned long send_offset;      // Then beginning offset of dev memory for sending data
+    unsigned long send_max_size;    // The maximum dev memory size for sending data
+    void *send_buffer;              // The buffer for sending data
+    struct caximem_ctrl *send_info; // The info for sending data
+    wait_queue_head_t send_wq_head; // The wait queue header for sending
+    atomic_t send_wait;             // The atomic counter for sending
+
     /**
      * recv process
      */
-    int recv_signal;             // Signal used to notify recive finish
-    struct semaphore recv_sem;   // Semaphore for writing data
-    unsigned long recv_offset;   // The beginning offset of dev memory for recving data
-    unsigned long recv_max_size; // The maximum dev memory size for recving data
-    void *recv_buffer;           // The buffer for recving data
+    int recv_signal;                // Signal used to notify recive finish
+    struct semaphore recv_sem;      // Semaphore for writing data
+    unsigned long recv_offset;      // The beginning offset of dev memory for recving data
+    unsigned long recv_max_size;    // The maximum dev memory size for recving data
+    void *recv_buffer;              // The buffer for recving data
+    struct caximem_ctrl *recv_info; // The info for reving data
+    wait_queue_head_t recv_wq_head; // The wait queue header for recving
+    atomic_t recv_wait;             // The atomic counter for recving
+
     /**
      * character device
      */
