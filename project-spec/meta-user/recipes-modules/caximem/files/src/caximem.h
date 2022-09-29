@@ -40,6 +40,8 @@ struct caximem_ctrl
     unsigned int size : 24; // data size in ram
 };
 
+typedef struct caximem_ctrl caximem_ctrl_t;
+
 struct caximem_device
 {
     unsigned int magic; // Magic number
@@ -53,7 +55,8 @@ struct caximem_device
     unsigned long send_offset;      // Then beginning offset of dev memory for sending data
     unsigned long send_max_size;    // The maximum dev memory size for sending data
     void *send_buffer;              // The buffer for sending data
-    struct caximem_ctrl *send_info; // The info for sending data
+    caximem_ctrl_t *send_info_reg;  // The info reg for sending data
+    caximem_ctrl_t send_info;       // The info for sending data
     wait_queue_head_t send_wq_head; // The wait queue header for sending
     atomic_t send_wait;             // The atomic counter for sending
 
@@ -65,7 +68,8 @@ struct caximem_device
     unsigned long recv_offset;      // The beginning offset of dev memory for recving data
     unsigned long recv_max_size;    // The maximum dev memory size for recving data
     void *recv_buffer;              // The buffer for recving data
-    struct caximem_ctrl *recv_info; // The info for reving data
+    caximem_ctrl_t *recv_info_reg;  // The info reg for reving data
+    caximem_ctrl_t recv_info;       // The info for reving data
     wait_queue_head_t recv_wq_head; // The wait queue header for recving
     atomic_t recv_wait;             // The atomic counter for recving
 
