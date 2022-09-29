@@ -18,19 +18,28 @@
 #include <linux/io.h>
 #include <linux/interrupt.h>
 #include <linux/cdev.h>
+#include <linux/string.h>
 
 #include "caximem.h"
 
 static const char *dev_fmt = "%s_%d";
 
+void caximem_ctrl_set(void *phyaddr, caximem_ctrl_t *kaddr) {
+    memcpy(phyaddr, (void *)kaddr, sizeof(caximem_ctrl_t));
+}
+
+void caximem_ctrl_get(void *phyaddr, caximem_ctrl_t *kaddr) {
+    memcpy((void *)kaddr, phyaddr, sizeof(caximem_ctrl_t));
+}
+
 static irqreturn_t send_irq_handler(int irq, void *dev) {
     struct caximem_device *cdev;
 
     cdev = (struct caximem_device *)dev;
-    if (waitqueue_active(&cdev->send_wq_head)) {
-        atomic_dec(&cdev->send_wait);
-        wake_up(&cdev->send_wq_head);
-    }
+    // if (waitqueue_active(&cdev->send_wq_head)) {
+    atomic_dec(&cdev->send_wait);
+    wake_up(&cdev->send_wq_head);
+    // }
     caximem_debug("caximem send irq triggered. %d, %d\n", irq, cdev->send_signal);
     return IRQ_HANDLED;
 }
@@ -43,8 +52,9 @@ static irqreturn_t recv_irq_handler(int irq, void *dev) {
         atomic_dec(&cdev->recv_wait);
         wake_up(&cdev->recv_wq_head);
     } else {
-        cdev->recv_info->size = 0;
-        cdev->recv_info->enable = true;
+        cdev->recv_info.size = 0;
+        cdev->recv_info.enable = true;
+        caximem_ctrl_set(cdev->recv_info_reg, &cdev->recv_info);
     }
     caximem_debug("caximem send irq triggered. %d, %d\n", irq, cdev->recv_signal);
     return IRQ_HANDLED;
@@ -79,13 +89,15 @@ static ssize_t caximem_read(struct file *file, char __user *buffer, size_t lengt
     atomic_store = atomic_read(&caximem_dev->recv_wait);
     atomic_inc(&caximem_dev->recv_wait);
     wait_event(caximem_dev->recv_wq_head, atomic_read(&caximem_dev->recv_wait) == atomic_store);
-    length = caximem_dev->recv_info->size > length ? length : caximem_dev->recv_info->size;
-    if (copy_to_user(buffer, (char *)caximem_dev->recv_buffer + sizeof(struct caximem_ctrl), length)) {
+    caximem_ctrl_get(caximem_dev->recv_info_reg, &caximem_dev->recv_info);
+    length = caximem_dev->recv_info.size > length ? length : caximem_dev->recv_info.size;
+    if (copy_to_user(buffer, (char *)caximem_dev->recv_buffer + sizeof(caximem_ctrl_t), length)) {
         caximem_err("Read buffer failed.\n");
         rc = -EFAULT;
     } else {
-        caximem_dev->recv_info->size = 0;
-        caximem_dev->recv_info->enable = true;
+        caximem_dev->recv_info.size = 0;
+        caximem_dev->recv_info.enable = true;
+        caximem_ctrl_set(caximem_dev->recv_info_reg, &caximem_dev->recv_info);
         caximem_debug("read %d bytes from %ld.\n", length, p);
         rc = length;
     }
@@ -116,17 +128,18 @@ static ssize_t caximem_write(struct file *file, const char __user *buffer, size_
         rc = length == 0 ? 0 : -ENXIO;
         goto up_sem;
     }
-    if (length > caximem_dev->send_max_size - sizeof(struct caximem_ctrl)) {
-        length = caximem_dev->send_max_size - sizeof(struct caximem_ctrl);
+    if (length > caximem_dev->send_max_size - sizeof(caximem_ctrl_t)) {
+        length = caximem_dev->send_max_size - sizeof(caximem_ctrl_t);
     }
-    if (copy_from_user((char *)caximem_dev->send_buffer + sizeof(struct caximem_ctrl), buffer, length)) {
+    if (copy_from_user((char *)caximem_dev->send_buffer + sizeof(caximem_ctrl_t), buffer, length)) {
         caximem_err("Write buffer failed.\n");
         rc = -EFAULT;
     } else {
         atomic_store = atomic_read(&caximem_dev->send_wait);
         atomic_inc(&caximem_dev->send_wait);
-        caximem_dev->send_info->size = length;
-        caximem_dev->send_info->enable = true;
+        caximem_dev->send_info.size = length;
+        caximem_dev->send_info.enable = true;
+        caximem_ctrl_set(caximem_dev->send_info_reg, &caximem_dev->send_info);
         wait_event(caximem_dev->send_wq_head, atomic_read(&caximem_dev->send_wait) == atomic_store);
         caximem_debug("write %d bytes from %ld.\n", length, p);
         rc = length;
@@ -184,6 +197,12 @@ static int caximem_release(struct inode *inode, struct file *file) {
     }
     atomic_set(&caximem_dev->send_wait, 0);
     atomic_set(&caximem_dev->recv_wait, 0);
+    caximem_dev->send_info.size = 0;
+    caximem_dev->send_info.enable = false;
+    caximem_dev->recv_info.size = 0;
+    caximem_dev->recv_info.enable = true;
+    caximem_ctrl_set(caximem_dev->send_info_reg, &caximem_dev->send_info);
+    caximem_ctrl_set(caximem_dev->recv_info_reg, &caximem_dev->recv_info);
     file->private_data = NULL;
     up(&caximem_dev->file_sem);
     caximem_debug("release device\n");
@@ -264,18 +283,20 @@ int caximem_chrdev_init(struct caximem_device *dev) {
         rc = -ENOMEM;
         goto send_irq_cleanup;
     }
-    dev->send_info = (struct caximem_ctrl *)dev->send_buffer;
+    dev->send_info_reg = (caximem_ctrl_t *)dev->send_buffer;
     dev->recv_buffer = ioremap(dev->recv_offset, dev->recv_max_size);
     if (dev->recv_buffer == NULL) {
         caximem_err("recv buffer ioremap error");
         rc = -ENOMEM;
         goto unmap_send_buffer;
     }
-    dev->recv_info = (struct caximem_ctrl *)dev->recv_buffer;
-    dev->send_info->size = 0;
-    dev->send_info->enable = false;
-    dev->recv_info->size = 0;
-    dev->recv_info->enable = true;
+    dev->recv_info_reg = (caximem_ctrl_t *)dev->recv_buffer;
+    dev->send_info.size = 0;
+    dev->send_info.enable = false;
+    dev->recv_info.size = 0;
+    dev->recv_info.enable = true;
+    caximem_ctrl_set(dev->send_info_reg, &dev->send_info);
+    caximem_ctrl_set(dev->recv_info_reg, &dev->recv_info);
 
     // Init semaphore
     sema_init(&dev->file_sem, 1);
