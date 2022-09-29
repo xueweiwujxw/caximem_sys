@@ -53,26 +53,30 @@ static irqreturn_t recv_irq_handler(int irq, void *dev) {
  * @return ssize_t Returns the number of bytes read, or error code less than 0 for errors
  */
 static ssize_t caximem_read(struct file *file, char __user *buffer, size_t length, loff_t *offset) {
-    caximem_debug("read device\n");
     unsigned long p;
-    p = *offset;
     struct caximem_device *caximem_dev;
+    int rc;
+    p = *offset;
     caximem_dev = (struct caximem_device *)file->private_data;
+    down(&caximem_dev->recv_sem);
     if (p > caximem_dev->recv_max_size) {
         caximem_err("Invalid offset.\n");
-        return length == 0 ? 0 : -ENXIO;
+        rc = length == 0 ? 0 : -ENXIO;
+        goto up_sem;
     }
-    if (length > caximem_dev->recv_max_size - p) {
-        length = caximem_dev->recv_max_size - p;
-    }
-    if (copy_to_user(buffer, (char *)caximem_dev->recv_buffer + p, length)) {
+    length = caximem_dev->recv_info->size;
+    if (copy_to_user(buffer, (char *)caximem_dev->recv_buffer + sizeof(struct caximem_ctrl), length)) {
         caximem_err("Read buffer failed.\n");
-        return -EFAULT;
+        rc = -EFAULT;
     } else {
-        offset += length;
+        caximem_dev->recv_info->size = 0;
+        caximem_dev->recv_info->enable = true;
         caximem_debug("read %d bytes from %ld.\n", length, p);
-        return length;
+        rc = length;
     }
+up_sem:
+    up(&caximem_dev->recv_sem);
+    return rc;
 }
 
 /**
@@ -85,29 +89,32 @@ static ssize_t caximem_read(struct file *file, char __user *buffer, size_t lengt
  * @return ssize_t  Returns the number of bytes written, or error code less than 0 for errors
  */
 static ssize_t caximem_write(struct file *file, const char __user *buffer, size_t length, loff_t *offset) {
-    caximem_debug("write device\n");
     unsigned long p;
-    p = *offset;
     struct caximem_device *caximem_dev;
+    int rc;
+    p = *offset;
     caximem_dev = (struct caximem_device *)file->private_data;
+    down(&caximem_dev->send_sem);
     if (p > caximem_dev->send_max_size) {
         caximem_err("Invalid offset.\n");
-        return length == 0 ? 0 : -ENXIO;
+        rc = length == 0 ? 0 : -ENXIO;
+        goto up_sem;
     }
-    if (length > caximem_dev->send_max_size - p - sizeof(struct caximem_info)) {
-        length = caximem_dev->send_max_size - p - sizeof(struct caximem_info);
+    if (length > caximem_dev->send_max_size - sizeof(struct caximem_ctrl)) {
+        length = caximem_dev->send_max_size - sizeof(struct caximem_ctrl);
     }
-    caximem_info("%d\n", p + sizeof(struct caximem_info));
-    if (copy_from_user((char *)caximem_dev->send_buffer + p + sizeof(struct caximem_info), buffer, length)) {
+    if (copy_from_user((char *)caximem_dev->send_buffer + sizeof(struct caximem_ctrl), buffer, length)) {
         caximem_err("Write buffer failed.\n");
-        return -EFAULT;
+        rc = -EFAULT;
     } else {
         caximem_dev->send_info->size = length;
         caximem_dev->send_info->enable = true;
-        offset += length;
         caximem_debug("write %d bytes from %ld.\n", length, p);
-        return length;
+        rc = length;
     }
+up_sem:
+    up(&caximem_dev->send_sem);
+    return rc;
 }
 
 /**
@@ -132,6 +139,10 @@ static int caximem_open(struct inode *inode, struct file *file) {
         caximem_err("No O_EXCL flags.\n");
         return -EINVAL;
     }
+    if (down_trylock(&caximem_dev->file_sem)) {
+        caximem_err("Current device is busy.\n");
+        return -EBUSY;
+    }
     file->private_data = caximem_dev;
     caximem_dev->send_buffer = ioremap(caximem_dev->send_offset, caximem_dev->send_max_size);
     if (caximem_dev->send_buffer == NULL) {
@@ -139,14 +150,14 @@ static int caximem_open(struct inode *inode, struct file *file) {
         rc = -ENOMEM;
         goto release_private_data;
     }
-    caximem_dev->send_info = (struct caximem_info *)caximem_dev->send_buffer;
+    caximem_dev->send_info = (struct caximem_ctrl *)caximem_dev->send_buffer;
     caximem_dev->recv_buffer = ioremap(caximem_dev->recv_offset, caximem_dev->recv_max_size);
     if (caximem_dev->recv_buffer == NULL) {
         caximem_err("recv buffer ioremap error");
         rc = -ENOMEM;
         goto unmap_send_buffer;
     }
-    caximem_dev->recv_info = (struct caximem_info *)caximem_dev->recv_buffer;
+    caximem_dev->recv_info = (struct caximem_ctrl *)caximem_dev->recv_buffer;
     caximem_dev->send_info->size = 0;
     caximem_dev->send_info->enable = false;
     caximem_dev->recv_info->size = 0;
@@ -177,6 +188,7 @@ static int caximem_release(struct inode *inode, struct file *file) {
     iounmap(caximem_dev->recv_buffer);
     iounmap(caximem_dev->send_buffer);
     file->private_data = NULL;
+    up(&caximem_dev->file_sem);
     caximem_debug("release device\n");
     return 0;
 }
@@ -235,7 +247,6 @@ int caximem_chrdev_init(struct caximem_device *dev) {
         caximem_err("failed to add a character device.\n");
         goto device_cleanup;
     }
-    caximem_debug("major: %d, minor: %d", MAJOR(dev->cdevno), MINOR(dev->cdevno));
 
     // Register interrupt
     rc = request_irq(dev->send_signal, send_irq_handler, IRQF_TRIGGER_RISING, MODULE_NAME, dev);
@@ -248,6 +259,11 @@ int caximem_chrdev_init(struct caximem_device *dev) {
         caximem_err("failed to request send interrupt.\n");
         goto send_irq_cleanup;
     }
+
+    // Init semaphore
+    sema_init(&dev->file_sem, 1);
+    sema_init(&dev->send_sem, 1);
+    sema_init(&dev->recv_sem, 1);
 
     // Success
     caximem_info("Success initialize chardev %s_%d.\n", dev->dev_name, dev->dev_id);
