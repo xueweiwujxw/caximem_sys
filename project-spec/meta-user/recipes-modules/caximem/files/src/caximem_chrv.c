@@ -21,6 +21,7 @@
 #include <linux/string.h>
 
 #include "caximem.h"
+#include "caximem_ioctl.h"
 
 static const char *dev_fmt = "%s_%d";
 
@@ -56,7 +57,7 @@ static irqreturn_t recv_irq_handler(int irq, void *dev) {
         cdev->recv_info.enable = true;
         caximem_ctrl_set(cdev->recv_info_reg, &cdev->recv_info);
     }
-    caximem_debug("caximem send irq triggered. %d, %d\n", irq, cdev->recv_signal);
+    caximem_debug("caximem recv irq triggered. %d, %d\n", irq, cdev->recv_signal);
     return IRQ_HANDLED;
 }
 
@@ -218,12 +219,46 @@ static int caximem_mmap(struct file *file, struct vm_area_struct *vma) {
     return -EPERM;
 }
 
+/**
+ * @brief caximem device io control
+ *
+ * @param file The file structure pointer
+ * @param cmd IO control command
+ * @param arg IO control command extends args
+ * @return long Returns 0, or error code less than 0 for errors
+ */
+static long caximem_ioctl(struct file *file, unsigned int cmd, unsigned long arg) {
+    struct caximem_device *caximem_dev;
+    long rc;
+    rc = 0;
+    caximem_dev = (struct caximem_device *)file->private_data;
+
+    switch (cmd) {
+    case CAXIMEM_CANCEL:
+        while (waitqueue_active(&caximem_dev->recv_wq_head)) {
+            atomic_dec(&caximem_dev->recv_wait);
+            wake_up(&caximem_dev->recv_wq_head);
+        }
+        while (waitqueue_active(&caximem_dev->send_wq_head)) {
+            atomic_dec(&caximem_dev->send_wait);
+            wake_up(&caximem_dev->send_wq_head);
+        }
+        caximem_debug("get caximem cancel request\n");
+        break;
+    default:
+        rc = -EPERM;
+        break;
+    }
+    return rc;
+}
+
 static const struct file_operations caximem_fops = {
     .owner = THIS_MODULE,
     .open = caximem_open,
     .read = caximem_read,
     .write = caximem_write,
     .mmap = caximem_mmap,
+    .unlocked_ioctl = caximem_ioctl,
     .release = caximem_release};
 
 // Initialize caximem character device
