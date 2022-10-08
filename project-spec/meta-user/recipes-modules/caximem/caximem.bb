@@ -8,6 +8,7 @@ inherit module
 INHIBIT_PACKAGE_STRIP = "1"
 
 SRC_URI = "file://Makefile \
+           file://src/caximem_ioctl.h \
            file://src/caximem.h \
            file://src/caximem_chrv.c \
            file://src/caximem.c \
