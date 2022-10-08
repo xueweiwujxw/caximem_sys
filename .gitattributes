@@ -1,3 +1,0 @@
-zynq_top_wrapper.xsa filter=lfs diff=lfs merge=lfs -text
-project-spec/hw-description/system.xsa filter=lfs diff=lfs merge=lfs -text
-project-spec/hw-description/zynq_top_wrapper.bit filter=lfs diff=lfs merge=lfs -text
