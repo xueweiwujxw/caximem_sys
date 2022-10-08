@@ -96,12 +96,12 @@ static ssize_t caximem_read(struct file *file, char __user *buffer, size_t lengt
         caximem_err("Read buffer failed.\n");
         rc = -EFAULT;
     } else {
-        caximem_dev->recv_info.size = 0;
-        caximem_dev->recv_info.enable = true;
-        caximem_ctrl_set(caximem_dev->recv_info_reg, &caximem_dev->recv_info);
         caximem_debug("read %d bytes from %ld.\n", length, p);
         rc = length;
     }
+    caximem_dev->recv_info.size = 0;
+    caximem_dev->recv_info.enable = true;
+    caximem_ctrl_set(caximem_dev->recv_info_reg, &caximem_dev->recv_info);
 up_sem:
     up(&caximem_dev->recv_sem);
     return rc;
@@ -240,6 +240,9 @@ static long caximem_ioctl(struct file *file, unsigned int cmd, unsigned long arg
             wake_up(&caximem_dev->recv_wq_head);
         }
         while (waitqueue_active(&caximem_dev->send_wq_head)) {
+            caximem_dev->send_info.size = 0;
+            caximem_dev->send_info.enable = false;
+            caximem_ctrl_set(caximem_dev->send_info_reg, &caximem_dev->send_info);
             atomic_dec(&caximem_dev->send_wait);
             wake_up(&caximem_dev->send_wq_head);
         }

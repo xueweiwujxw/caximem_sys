@@ -56,6 +56,7 @@ int main(int argc, char const *argv[]) {
     for (int i = 0; i < ret; ++i) {
         printf("%d ", rbuf[i]);
     }
+    printf("\n");
 
     // create a thread to read
     struct file_read file_args = {
@@ -68,12 +69,12 @@ int main(int argc, char const *argv[]) {
     }
 
     // cancel all transfer with reset
+    sleep(1);
     ret = ioctl(fd, CAXIMEM_CANCEL);
     if (ret < 0)
         printf("ioctl failed. %s.\n", strerror(errno));
 
     void *pret;
-    sleep(1);
     pthread_join(pid, &pret);
     if (pret != NULL) {
         printf("%d read ret %d.\n", ((struct file_read *)pret)->fd, ((struct file_read *)pret)->read_ret);
